@@ -1,0 +1,587 @@
+---
+title: "HW3 - EDAV - Mitras"
+author: 'Mitras Dimitrios'
+date: "2023-11-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<h1>Part A</h1>
+**The present study concerns a dataset of medical measurements. Specifically, it contains 403 records for 22 variables, of which 7 are calculated from other variables. The data concerns measurements related to diabetes.
+
+For the first part of the study, the handling of potential outliers and the analysis/visualization of the data were requested in order to understand the dataset.
+
+For the completion of the assignment, pre-existing code from lectures, the internet, and AI-generated models (ChatGPT, Bard) was utilized.**
+
+<h2>Understanding the Dataset</h2>
+
+<strong>First, read the data and load the libraries</strong>
+```{r message=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(reshape2)
+
+df <- read.csv("diabetes.csv")
+head(df)
+```
+
+
+<strong>General data overview and missing value checks</strong>
+```{r}
+summary(df)
+
+```
+
+```{r}
+print(colSums(is.na(df)))
+```
+There are some NAs, but their number is not too high. We will not process the missing values initially.
+
+Lets take a look at our data
+Let's start by displaying the formula for the variables and some plots to better understand them.
+<ul>
+<li>numeric: "total_cholesterol"    "stabilized.glucose"   "hdl"                  "total_chol_hdl_ratio"
+ "glycosoloatedhgb"     "height"      "bp.1s"                "bp.1d"                "waist"                "hip"            
+ "weight"  "age"  "BMI" "waist_hip_ratio"    (</li>
+<li>binary:  "gender" "diabetes_diagnosis" "location" </li>
+<li>categorical:  "BMI_cat_5"            "age_cat"          "waist_hip_cat"        "BMI_cat_3" </li>
+</ul>
+
+<strong> Histogram of Total Cholesterol </strong>
+```{r warning=FALSE}
+ggplot(df, aes(x = total_cholesterol)) +
+  geom_histogram(binwidth = 10, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Total Cholesterol",
+       x = "Total Cholesterol",
+       y = "Frequency")
+```
+
+<strong> Histogram of Stabilized Glucose </strong>
+```{r}
+ggplot(df, aes(x = stabilized.glucose)) +
+  geom_histogram(binwidth = 10, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Stabilized Glucose",
+       x = "Stabilized Glucose",
+       y = "Density")
+```
+
+<strong>Bar Chart of Location</strong>
+```{r}
+ggplot(df, aes(x = location, fill = factor(gender))) +
+  geom_bar() +
+  labs(title = "Bar Chart of Location",
+       x = "Location",
+       y = "Count")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+ggplot(df, aes(x = BMI_cat_5, fill = BMI_cat_5)) +
+  geom_bar() +
+  labs(title = "Bar Chart of BMI Categories",
+       x = "BMI Category",
+       y = "Count")
+```
+
+
+<h2> Check for outliers via 2 plots of Boxplots</h2>
+
+<strong>Plot1: Boxplots for each numeric variable, with geom.jitter</strong>
+```{r warning=FALSE}
+selected_vars <- c("total_cholesterol", "stabilized.glucose", "hdl", "total_chol_hdl_ratio", "glycosoloatedhgb", "age" ,"height", "weight" , "bp.1s", "bp.1d" , "waist", "hip" , "BMI", "waist_hip_ratio")
+df_numeric <- df[selected_vars]
+
+df_long <- gather(df_numeric, key = "variable", value = "value")
+
+ggplot(df_long, aes(x = variable, y = value)) +
+  geom_boxplot(outlier.shape = NA, color = "skyblue", fill = "skyblue", alpha = 0.7) +
+  geom_jitter(aes(color = variable), width = 0.2) +
+  labs(title = "Boxplots for Numeric Variables") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+The plot shows that some variables have a large variance. Because the scale is different for each variable, we also present a plot with common boxplots and logarithmic values of the variables.
+
+<strong>Plot 2: Boxplots for Log-Transformed Numeric Variables</strong>
+```{r message=FALSE, warning=FALSE}
+df_log <- log1p(df_numeric)
+df_long<-melt(df_log)
+ggplot(df_long, aes(x = variable, y = value)) +
+  geom_boxplot(color = "skyblue", fill = "skyblue", alpha = 0.7) +
+  labs(title = "Boxplots for Log-Transformed Numeric Variables") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The second log plot clearly shows the outliers of the variables. For example, they are also observed in the variable glycosoloatedghb.
+
+We will study the variables with the greatest variance: glycosoloatedghb and stabilized.gluscole. To examine the two variables in detail for possible outliers, we will use two scatterplots, one for each variable. Scatterplots show the distribution of the values in two-dimensional space.
+
+
+<strong>Scatterplot for glycosoloatedghb </strong>
+```{r warning=FALSE}
+ggplot(df, aes(x = 1:nrow(df), y = glycosoloatedhgb)) +
+  geom_point() +
+  labs(title = "Scatterplot for glycosoloatedhgb", x = "Observation Number", y = "glycosoloatedhgb")
+```
+
+<strong>Scatterplot for stabilized.glucose </strong>
+```{r warning=FALSE}
+ggplot(df, aes(x = 1:nrow(df), y = stabilized.glucose)) +
+  geom_point() +
+  labs(title = "Scatterplot for stabilized.glucose", x = "Observation Number", y = "stabilized.glucose")
+```
+
+In both cases, there are some outliers, but they are not necessarily errors. For example, for the variable stabilized.glucose, the following values are considered outliers:
+
+<strong>Create a scatterplot for stabilized.glucose with outliers highlighted </strong>
+```{r warning=FALSE}
+threshold <- 1.5 * sd(df$stabilized.glucose)
+
+# Identify outliers
+outliers <- which(df$stabilized.glucose > mean(df$stabilized.glucose) + threshold |
+                    df$stabilized.glucose < mean(df$stabilized.glucose) - threshold)
+
+
+ggplot(df, aes(x = 1:nrow(df), y = stabilized.glucose)) +
+  geom_point(color = ifelse(1:nrow(df) %in% outliers, "red", "blue")) +  # Color outliers in red, others in blue
+  labs(title = "Scatterplot for stabilized.glucose with Outliers Highlighted", x = "Observation Number", y = "stabilized.glucose")
+```
+
+The previous code segment helps identify outliers in the stabilized.glucose variable by considering values that are significantly higher or lower than the mean, with the threshold being determined by 1.5 times the standard deviation. Outliers are those data points that fall outside this range.
+
+In general, extreme values or potential outliers will not be deleted, as their removal could impact the data analysis
+
+<h2> Data Analysis </h2>
+
+<strong> Correlation Matrices beetwin all numeric values </strong>
+```{r warning=FALSE}
+library(GGally)
+ggpairs(df_numeric)
+```
+
+The reason i start my data analysis with the correlation coefficient, it's because it quantifies the strength and direction of a linear relationship between two numeric variables. It ranges from -1 to 1. For instance, a correlation coefficient of 0.85 between 'weight' and 'waist' indicates a strong positive correlation, suggesting that higher levels of wight are associated with higher levels of waist, which is normal of course. The complete correlation matrix is provided in the appendix, and scatter plots were generated to visually inspect the identified relationships.
+
+The correlations are mostly expected, as their variables are actually related. Some variables are calculated from other ones also. So lets plot 1 scatter plots just to understand their correlation coefficient.
+
+<strong>Scatter Plot and of waist and wight
+```{r warning=FALSE}
+ggplot(df, aes(x = waist, y = weight)) +
+  geom_point() +
+  labs(title = "Scatter Plot of waist and weight",
+       x = "Waist",
+       y = "Weight")
+```
+
+
+
+From the previous ggpairs an outlier value in the fourth variable (total_chol_hdl_ratio) is worth our attention and further investigation.
+ 
+
+Lets take a look on this variable with the variable BMI depending on the Diabetes Diagnosis
+
+<strong>Scatter Plot of total_chol_hdl_ratio and BMI</strong>
+```{r warning=FALSE}
+# Convert diabetes_diagnosis to a factor for categorical color
+df$diabetes_diagnosis <- factor(df$diabetes_diagnosis, levels = c(0, 1), labels = c("No Diabetes", "Diabetes"))
+
+ggplot(df, aes(x = total_chol_hdl_ratio, y = weight, color = diabetes_diagnosis)) +
+  geom_point() +
+  labs(title = "Scatter Plot of total_chol_hdl_ratio and BMI",
+       x = "Total Cholesterol to HDL Ratio",
+       y = "BMI",
+       color = "Diabetes Diagnosis") 
+```
+
+This is an extreme value that is far from the average and will be excluded from the analysis so lets take a look with diferrent x-value(glycosoloatedhgb) and depending on gender,   .
+
+```{r warning=FALSE}
+df <- df %>% filter(total_chol_hdl_ratio <= 15)
+
+# Convert gender to a factor for categorical color
+df$gender <- factor(df$gender, levels = c(0, 1), labels = c("Gender1", "Gender2"))
+
+
+ggplot(df, aes(x = total_chol_hdl_ratio, y = glycosoloatedhgb, color = gender)) +
+  geom_point() +
+  labs(title = "Scatter Plot of total_chol_hdl_ratio and glycosoloatedhgb",
+       x = "Total Cholesterol to HDL Ratio",
+       y = "glycosoloatedhgb",
+       color = "Gender") 
+
+```
+
+<h3> Linear Regression </h3>
+Now lets involve in our scatter plots the linear regression 
+
+<strong>Scatter Plot and Linear Regression of waist and hdl</strong>
+```{r message=FALSE, warning=FALSE}
+ggplot(df, aes(x = weight, y = hdl)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, linetype = "solid") +
+  labs(title = "Scatter Plot of waist and hdl",
+       x = "Waist",
+       y = "Hdl")
+```
+
+Yes, that is the conclusion we can draw from the presented data. The positive correlation between weight and high-density lipoprotein (HDL) cholesterol implies that as weight increases, the levels of HDL cholesterol decrease.
+
+This conclusion is consistent with existing literature. Studies have shown that obesity and overweight are associated with lower levels of HDL cholesterol.
+
+
+
+<h3> Height and weight </h3>
+
+Let's now examine the anthropometric variables weight and height in relation to some categorical variables.
+
+<strong> Scatter Plot of Height and Weight by Location </strong>
+```{r message=FALSE, warning=FALSE}
+ggplot(df, aes(x = height, y = weight, color = location)) +
+  geom_point() +
+  labs(title = "Scatter Plot of Height and Weight by Location",
+       x = "Height",
+       y = "Weight",
+       color = "Location")
+```
+
+
+From the previous graph, it is inferred that the extreme values are encountered in the Buckingham Location.
+
+
+```{r message=FALSE, warning=FALSE}
+ggplot(df, aes(x = height, y = weight)) +
+  geom_point() +
+  facet_wrap(~gender) +
+  labs(title = "Scatter Plots of Height and Weight by Gender",
+       x = "Height",
+       y = "Weight")
+```
+
+From the previous graph, it is inferred that that gender1 refers to man, but thats something we dont really care of.
+
+
+<h3> Diabetes Diagnosis </h3>
+
+The remaining plots pertain to the variable "diabetes diagnosis."
+
+<Strong>Distribution of Diabetes Diagnosis</strong>
+```{r}
+ggplot(df, aes(x = factor(diabetes_diagnosis))) +
+  geom_bar() +
+  labs(title = "Distribution of Diabetes Diagnosis",
+       x = "Diabetes Diagnosis",
+       y = "Count")
+```
+
+<strong>Box Plot of Stabilized Glucose by Diabetes Diagnosis</strong>
+```{r}
+ggplot(df, aes(x = factor(diabetes_diagnosis), y = stabilized.glucose)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Stabilized Glucose by Diabetes Diagnosis",
+       x = "Diabetes Diagnosis",
+       y = "Stabilized Glucose")
+```
+
+The reason for creating this plot is to demonstrate that, on average, a high value in Stabilized Glucose leads to diabetes, but there are also some exceptions.
+
+Now, let's see if gender affects the above conclusion.
+
+<strong> Box Plot of Stabilized Glucose by Diabetes Diagnosis by Gender </strong>
+```{r}
+ggplot(df, aes(x = factor(diabetes_diagnosis), y = stabilized.glucose, fill = factor(gender))) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Stabilized Glucose by Diabetes Diagnosis and Gender",
+       x = "Diabetes Diagnosis",
+       y = "Stabilized Glucose",
+       fill = "Gender") +
+  scale_fill_manual(values = c("blue", "pink"))
+```
+
+
+Now, let's add the variable "Location" to the above plot.
+
+<strong> Box Plot of Stabilized Glucose by Diabetes Diagnosis, Gender, and Location </strong>
+```{r}
+ggplot(df, aes(x = factor(diabetes_diagnosis), y = stabilized.glucose, fill = interaction(factor(gender), location))) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Stabilized Glucose by Diabetes Diagnosis, Gender, and Location",
+       x = "Diabetes Diagnosis",
+       y = "Stabilized Glucose",
+       fill = "Gender & Location") +
+  scale_fill_manual(values = c("blue", "pink", "lightgreen", "purple", "orange", "brown"))
+```
+
+And now change the variable x , x=hdl
+<strong>Box Plot of Hdl by Diabetes Diagnosis, Gender, and Location</strong
+```{r}
+ggplot(df, aes(x = factor(diabetes_diagnosis), y = hdl, fill = interaction(factor(gender), location))) +
+  geom_boxplot() +
+  labs(title = "Box Plot of hdl by Diabetes Diagnosis, Gender, and Location",
+       x = "Diabetes Diagnosis",
+       y = "Hdl",
+       fill = "Gender & Location") +
+  scale_fill_manual(values = c("blue", "pink", "lightgreen", "purple", "orange", "brown"))
+```
+
+It is observed that the variable "hdl" does not affect the value of "diabetes_diagnosis."
+
+
+<h3> Catergorical Variables </h3>
+
+So far, we have seen plots related to numeric variables or numeric variables with a categorical one or a combination of them. Let's now explore plots involving categorical variables. Let's plot first a plot based on diabetes_diagnosis
+
+<strong>Bar Plot of Gender and Diabetes Diagnosis</strong>
+```{r}
+df$gender <- factor(df$gender)
+df$diabetes_diagnosis <- factor(df$diabetes_diagnosis)
+
+# Δημιουργία του bar plot
+ggplot(df, aes(x = gender, fill = diabetes_diagnosis)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(title = "Bar Plot of Gender and Diabetes Diagnosis",
+       x = "Gender",
+       y = "Count",
+       fill = "Diabetes Diagnosis")
+```
+
+Undoubtedly, there is a significant difference between the two genders.
+
+
+
+<strong>Bar Plot of Age Category and BMI Category</strong>
+```{r}
+df$BMI_cat_3 <- factor(df$BMI_cat_3)
+
+
+ggplot(df, aes(x = age_cat, fill = BMI_cat_3)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(title = "Bar Plot of Age Category and BMI Category",
+       x = "Age Category",
+       y = "Count",
+       fill = "BMI Category")
+```
+
+
+Let's add a third categorical variable as well.
+
+<Strong>Bar Plot of Age Category and BMI Category (Colored by Gender)</strong>
+```{r}
+df$BMI_cat_3 <- factor(df$BMI_cat_3)
+df$age_cat <- factor(df$age_cat)
+df$gender <- factor(df$gender)
+
+# Δημιουργία του bar plot με χρήση χρώματος για το gender
+ggplot(df, aes(x = age_cat, fill = BMI_cat_3, color = gender)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(title = "Bar Plot of Age Category and BMI Category (Colored by Gender)",
+       x = "Age Category",
+       y = "Count",
+       fill = "BMI Category",
+       color = "Gender")
+```
+
+Another way to visualize two categorical variables is through heatmaps.
+
+<strong>Heatmap of Location and Diabetes Diagnosis</strong>
+```{r}
+df$location <- factor(df$location)
+df$diabetes_diagnosis <- factor(df$diabetes_diagnosis)
+
+ggplot(df, aes(x = location, y = diabetes_diagnosis)) +
+  geom_bin2d(aes(fill = stat(count)), color = "white") +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "Heatmap of Location and Diabetes Diagnosis",
+       x = "Location",
+       y = "Diabetes Diagnosis",
+       fill = "Count") 
+```
+
+
+<strong>Heatmap of BMI_cat5 and Age_cat</strong>
+```{r}
+df$BMI_cat_5 <- factor(df$BMI_cat_5)
+
+ggplot(df, aes(x = BMI_cat_5, y = age_cat, fill = ..count..)) +
+  geom_bin2d() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "Heatmap of BMI_cat5 and Age_cat",
+       x = "BMI_cat_5",
+       y = "Age_cat",
+       fill = "Count")
+```
+
+
+In the next diagram, we have a heatmap with three variables (diabetes_diagnosis, location, gender). Specifically, on the left, we have the values of diabetes diagnosis, and on the right, we have the values of gender (0,1). Missing values were removed in this plot. For a better analysis of the data it is showed the count variable 
+
+<strong>Heatmap of 3 Variables</strong>
+```{r}
+subset_df<-df
+subset_df$location <- factor(df$location)
+subset_df$diabetes_diagnosis <- factor(df$diabetes_diagnosis)
+subset_df$gender <- factor(df$gender)
+
+# Αφαίρεση των γραμμών που περιέχουν NA
+subset_df <- na.omit(subset_df)
+
+ggplot(subset_df, aes(x = location, y = diabetes_diagnosis, fill = ..count..)) +
+  geom_bin2d() +
+  geom_text(aes(label = ..count..), stat = "bin2d", vjust = 1, color = "black") +
+  scale_fill_gradient(low = "white", high = "blue", limits = c(0, 100)) +
+  facet_grid(gender ~ .) +
+  labs(title = "Heatmap of 3 Variables",
+       x = "Location",
+       y = "Diabetes Diagnosis",
+       fill = "Count")
+```
+
+
+In the following diagram, we have a plot involving 4 variables. On the right, we have BMI_cat_5, and at the top, the division based on age_cat.
+
+<strong>Heatmap of Multiple Variables</strong>
+```{r}
+subset_df<-df
+subset_df$location <- factor(df$location)
+subset_df$diabetes_diagnosis <- factor(df$diabetes_diagnosis)
+subset_df$BMI_cat_5 <- factor(df$BMI_cat_5)
+subset_df$age_cat <- factor(df$age_cat)
+
+# Αφαίρεση των γραμμών που περιέχουν NA
+subset_df <- na.omit(subset_df)
+
+ggplot(subset_df, aes(x = location, y = diabetes_diagnosis, fill = ..count..)) +
+  geom_bin2d() +
+  geom_text(aes(label = ..count..), stat = "bin2d", vjust = 1, color = "black") +
+  scale_fill_gradient(low = "white", high = "blue", limits = c(0, 40)) +
+  facet_grid(BMI_cat_5 ~ age_cat) +
+  labs(title = "Heatmap of Multiple Variables",
+       x = "Location",
+       y = "Diabetes Diagnosis",
+       fill = "Count")
+```
+
+
+Therefore, in the data analysis presented, visualization methods for a single variable, combinations of numeric variables, and combinations of categorical with numeric variables were demonstrated. In the end, there are visualizations involving interactions between categorical variables, with the heatmap being the most efficient.
+
+
+<h1>Part B</h1>
+
+
+Now, a subset of the previous dataset is provided, containing many missing values that need to be addressed. In the end, a comparison will be made with the original dataset to evaluate the imputation.
+
+<h2>Underestanding the Dataset</h2>
+
+```{r}
+df2 <- read.csv("diabetes2.csv")
+df <- read.csv("diabetes.csv")
+head(df2)
+```
+
+```{r}
+print(colSums(is.na(df2)))
+```
+
+
+
+<h2>Impute Missing Values </h2>
+
+The "mice" package provides functions for creating imputed datasets and replacing missing values. The Random Forest method (method = "rf") is used to predict the missing values of "age" and "total_cholesterol". The parameters m = 5 determine the number of samples to be created, and maxit = 50 determines the number of iterations.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Φορτώστε τη βιβλιοθήκη caret
+library(mice)
+
+# Δημιουργία ενός διαμερισματοποιημένου dataset με τις απουσιάζουσες τιμές στο "age"
+imputed_data <- mice(df2[, c("total_cholesterol", "gender", "weight", "age")], 
+                      method = "rf", # Χρησιμοποιούμε τη μέθοδο Random Forest για την πρόβλεψη του "age"
+                      m = 5,           # Αριθμός δειγμάτων που θα δημιουργηθούν
+                      maxit = 50)      # Αριθμός επαναλήψεων
+
+# Συμπληρώστε τις απουσιάζουσες τιμές στο αρχικό dataset
+df2$age <- complete(imputed_data)$age
+df2$total_cholesterol <- complete(imputed_data)$total_cholesterol
+
+
+
+```
+
+Now, with the "age" and "total_cholesterol" variable imputed,we can proceed with imputing the missing values for other variables.
+We will next impute the missing values for the variable "weight" and "gender" using the "predictive mean matching" (PMM) method. PMM is a method that takes into account the distribution of existing data to predict and impute missing values.
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+imputed_weight_data <- mice(df2[, c("total_cholesterol", "gender", "age", "weight")], 
+                             method = "pmm", # Χρησιμοποιούμε τη μέθοδο PMM
+                             m = 5,           # Αριθμός δειγμάτων που θα δημιουργηθούν
+                             maxit = 50)      # Αριθμός επαναλήψεων
+
+# Συμπλήρωση των απουσιάζουσων τιμών στο αρχικό dataset
+df2$weight <- complete(imputed_weight_data)$weight
+df2$gender <- complete(imputed_data)$gender
+
+
+```
+
+
+<h2> Prediction Evaluation </h2>
+
+<h3> For categorical Variable </h3>
+
+```{r}
+result_text <- paste0("Το άθροισμα της μεταβλητής gender για το Actual όταν η τιμή της είναι 0 είναι: ", sum(df$gender == 0))
+print(result_text)
+
+```
+
+```{r}
+result_text <- paste0("Το άθροισμα της μεταβλητής gender για το Predicted όταν η τιμή της είναι 0 είναι: ", sum(df2$gender == 0))
+print(result_text)
+```
+
+```{r}
+result_text <- paste0("Το άθροισμα της μεταβλητής gender για το Actual όταν η τιμή της είναι 1 είναι: ", sum(df$gender == 1))
+print(result_text)
+```
+
+```{r}
+result_text <- paste0("Το άθροισμα της μεταβλητής gender για το Predicted όταν η τιμή της είναι 1 είναι: ", sum(df2$gender == 1))
+print(result_text)
+```
+
+
+<h3> For numeric variables </h3>
+
+<strong> total_cholesterol </strong>
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής total_cholesterol για το Αctual είναι: ", mean(df$total_cholesterol, na.rm = TRUE))
+print(result_text)
+```
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής total_cholesterol για το Predicted είναι: ", mean(df2$total_cholesterol, na.rm = TRUE))
+print(result_text)
+```
+<strong> weight </strong>
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής weight για το Αctual είναι: ", mean(df$weight, na.rm = TRUE))
+print(result_text)
+```
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής weight για το Predicted όταν  είναι: ", mean(df2$weight, na.rm = TRUE))
+print(result_text)
+```
+
+<strong> age </strong>
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής age για το Αctual είναι: ", mean(df$age, na.rm = TRUE))
+print(result_text)
+```
+
+```{r}
+result_text <- paste0("O μέσος όρος μεταβλητής age για το Predicted όταν  είναι: ", mean(df2$age, na.rm = TRUE))
+print(result_text)
+```
+
+
+Γενικά τα αποτελέσματα είναι πολύ κοντά στις πραγματικές τιμές, τα μοντέλα απέδωσαν.
